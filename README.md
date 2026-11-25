@@ -11,7 +11,9 @@ End-to-end on-device voice-dictation polishing pipeline: data curation & PII scr
 - `prompts/sft_system.txt`: single-source 70-character system prompt shared verbatim between training, offline eval, and local serving.
 - `eval_parity.py` & `run_local_parity_suite.sh`: converts HF checkpoint to `F16 / Q8_0 / Q4_0` GGUF and runs the behavioral parity gate (`p0_preserve_recall`, `under_drops`, `over_expands`, `<think>` leaks, char similarity vs ground truth and vs 4090 bf16, warm median/p90 latency, and tok/s).
 - `polish_gateway.py` & `start_polish_0.6b.sh`: OpenAI-compatible local wrapper (deterministic dictionary alias pre/post replacement without mutating system prompt KV cache, CJK/ASCII spacing, and `<0.55x` / `>1.5x` / `<think>` circuit-breaker fallback with local bad-case logging).
-- `bench/` & `keepwarm.plist`: Apple Silicon `llama.cpp` serving benchmarks and 30-second dual-slot GPU keep-warm (`slot 1` ping preserves `slot 0` prefix cache).
+- `cpp/` (`CMakeLists.txt`, `polish_engine.hpp/.cpp`, `main.cpp`): zero-Python C++20 embedded `libllama` inference engine & HTTP/SSE server — pins system prompt KV `[0, N_sys)` with incremental LCP prefix reuse (`llama_memory_seq_rm`), hard-masks `<think>`/`</think>` via custom `llama_sampler_i`, runs in-process `ngram-simple` speculative decoding (`n=1, m=6`), and integrates dictionary replacement + circuit-breaker guardrails.
+- `apple_silicon/` (`convert_silero_coreml_batched.py`, `ane_vad_bench_b32.swift`, `run_heterogeneous_bench.py`): Apple Silicon Metal GPU contention suite (MLX `qwen3_asr_server` vs GGML `voxt_polish_cpp`) and 32-chunk batched CoreML FP16 Silero VAD v6 offload to Apple Neural Engine (ANE).
+- `bench/` & `keepwarm.plist`: Apple Silicon `llama.cpp` serving benchmarks, anonymized low-level results (`bench/apple_silicon_lowlevel_results.json`), and 30-second dual-slot GPU keep-warm (`slot 1` ping preserves `slot 0` prefix cache).
 
 ## Anonymized Experimental Results
 
@@ -52,6 +54,20 @@ Key engineering findings:
 ### 3. End-to-End Real-Device Latency vs SGLang-Omni Native Voxt (M1 Pro 16 GB)
 
 Measured on the same M1 Pro 16 GB with the official Voxt 2.1.3 Omni Runtime (`Qwen3-ASR 0.6B 4bit`) replaying 5 real Chinese dictations (A–E, 7.4–38.7 s) at 1.0× speed via `VOXTNEW_HELPER_CAPTURE_FILE`, releasing the key 0.5 s after speech ends. Metric: **Stop-to-text latency (`stop→end`)**.
+
+### 4. Apple Silicon Low-Level Engineering (`cpp/`, `apple_silicon/`, `bench/apple_silicon_lowlevel_results.json`)
+
+- **C++20 Embedded `libllama` Engine (`cpp/voxt_polish_cpp`)**:
+  - Replaces `llama-server + polish_gateway.py` in a single native binary (`918 MB` RSS).
+  - Exact behavioral parity vs 4090 bf16 (`0.9958`, `29/40` exact), `40/40` bit-identical between `--no-spec` and in-process `ngram-simple (n=1, m=6)`, `100%` P0-Preserve, `0.8098` ref entity recall, `0` `<think>` leaks, `0` fallbacks.
+  - 40-pair holdout median **`201.8 ms`** (vs `223 ms` `llama-server`); 6-sentence HTTP warm median **`81.9 ms`** (`p90 114.6 ms`, `258.4 tok/s`); 12-step simulated streaming LCP reuse cut newly prefilled tokens from `340` to **`149` (`-56.2%`, `86.6%` KV reuse)**.
+- **Metal GPU Contention & 32-Chunk Batched CoreML ANE VAD (`apple_silicon/`)**:
+  - Running MLX `qwen3_asr_server` and GGML `voxt_polish_cpp` concurrently on M1 Pro slowed 38.7 s ASR by **`+57.2%`** (`858.8 -> 1,349.9 ms`) and 0.6B LLM by **`+100.1%`** (`99.8 -> 199.7 ms`).
+  - Offloading Silero VAD v6 to CoreML FP16 on ANE exposed single-chunk (`B=1`) dispatch overhead (`1,174.6 ms` on 38.7 s audio); unrolling 32 chunks (`1.024 s`) per CoreML graph cut 38.7 s latency to **`20.64 ms`** (`17.3 us/chunk`, RTF `0.0005`), 5-recording total **`52.42 ms`** (**`8.05x`** faster than MLX Metal `silero_vad_server`'s `422.2 ms`, **`99.75%`** decision agreement vs PyTorch FP32 across 1,194 chunks, `0%` Metal GPU contention).
+- **VAD-Locked Streaming ASR Pieces (5 Real Recordings, Utter + `voxt_polish_cpp`)**:
+  - Lowering `ASRFast` `PiecesAfter` from upstream `60 s` to `15 s` (`Min=8s, Target=12s, Max=18s`) cut post-stop latency on 16.5 s / 23.9 s / 38.7 s recordings from `498.5 / 569.5 / 1,293.5 ms` down to **`213.0 / 349.0 / 250.0 ms`** (`11.1x` faster than 4B's `2.78 s` on 38.7 s audio; honest tradeoff: `0.9806` / `0.9794` text similarity on 16.5 s / 23.9 s, `0.7628` across 3 cuts on 38.7 s).
+
+#### Real-Device Progression (5 Dictations, M1 Pro 16 GB)
 
 | Metric (`stop→end`) | SGLang-Omni Native Default (4B `Q4_0`, `liveCleanLocal=false`) | Utter Client + 4B `Q4_0` (`liveCleanLocal=true` + punct reuse) | Utter + `0.6B Q8_0` + `ngram-simple` + Gateway (`liveCleanLocal=true`) | Reduction vs Native |
 | --- | ---: | ---: | ---: | ---: |

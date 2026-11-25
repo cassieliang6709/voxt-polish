@@ -19,3 +19,9 @@ server.log
 __pycache__/
 .DS_Store
 .venv/
+cpp/build/
+apple_silicon/.venv/
+apple_silicon/*.mlpackage/
+apple_silicon/*.mlmodelc/
+apple_silicon/ane_vad_bench
+apple_silicon/ane_vad_bench_b32

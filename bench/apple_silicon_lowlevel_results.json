@@ -1,0 +1,102 @@
+{
+  "date": "2026-11-26",
+  "hardware": "Apple M1 Pro 16GB Unified Memory",
+  "direction_b_cpp_libllama": {
+    "binary": "cpp/build/voxt_polish_cpp",
+    "rss_mb": 918,
+    "holdout_40_nospec_med_ms": 471.51,
+    "holdout_40_spec_m6_raw_med_ms": 212.71,
+    "holdout_40_spec_m6_raw_p90_ms": 523.43,
+    "holdout_40_spec_m6_guard_med_ms": 201.76,
+    "holdout_40_spec_m6_guard_p90_ms": 556.13,
+    "holdout_40_med_prefill_ms": 2.4,
+    "holdout_40_draft_acc_med_pct": 56.0,
+    "holdout_40_tok_per_step": 2.91,
+    "holdout_40_parity_vs_4090_bf16": 0.9958,
+    "holdout_40_exact_vs_4090_bf16": "29/40",
+    "holdout_40_nospec_vs_spec_exact": "40/40",
+    "holdout_40_p0_preserve_recall": 1.0,
+    "holdout_40_ref_entity_recall_with_cpp_dict": 0.8098,
+    "holdout_40_think_leaks": 0,
+    "holdout_40_fallbacks": 0,
+    "streaming_12step_pinned_only_new_prefill_tokens": 340,
+    "streaming_12step_pinned_plus_lcp_new_prefill_tokens": 149,
+    "streaming_12step_lcp_kv_reuse_pct": 86.6,
+    "streaming_12step_sum_ms_pinned_only": 785.33,
+    "streaming_12step_sum_ms_pinned_plus_lcp": 668.09,
+    "http_6sent_warm_med_ms": 81.9,
+    "http_6sent_p90_ms": 114.6,
+    "http_6sent_med_tok_s": 258.4
+  },
+  "direction_a_apple_silicon_ane_and_contention": {
+    "silero_vad_v6_5wav_sum_ms": {
+      "coreml_b1_cpu_only_amx": 3198.7,
+      "coreml_b1_cpu_and_ne_ane": 2379.6,
+      "coreml_b1_cpu_and_gpu_metal": 2282.3,
+      "mlx_metal_silero_vad_server": 422.2,
+      "coreml_b32_cpu_and_ne_ane_fp16": 52.42
+    },
+    "silero_vad_v6_wav_e_38_7s_ms": {
+      "coreml_b1_cpu_and_ne_ane": 1174.6,
+      "mlx_metal_silero_vad_server": 63.6,
+      "coreml_b32_cpu_and_ne_ane_fp16": 20.64
+    },
+    "coreml_b32_ane_parity_vs_pytorch_fp32_1194_chunks": {
+      "decision_agreement_pct": 99.749,
+      "pt_speech_chunks": 886,
+      "ane_speech_chunks": 887,
+      "mean_abs_diff": 0.001377
+    },
+    "metal_gpu_contention_mlx_asr_vs_ggml_cpp_llm": {
+      "long_wav": "wav_e_38.7s",
+      "isolated_mlx_asr_ms": [
+        926.8,
+        858.8,
+        832.7
+      ],
+      "isolated_mlx_asr_med": 858.8,
+      "concurrent_mlx_asr_ms": [
+        1937.8,
+        1349.9,
+        1178.9
+      ],
+      "concurrent_mlx_asr_med": 1349.9,
+      "asr_contention_pct": 57.2,
+      "isolated_cpp_llm_med": 99.8,
+      "isolated_cpp_llm_p90": 188.8,
+      "concurrent_cpp_llm_with_mlx_asr_med": 199.7,
+      "concurrent_cpp_llm_with_mlx_asr_p90": 411.8,
+      "llm_contention_with_mlx_asr_pct": 100.1,
+      "concurrent_cpp_llm_with_amx_vad_med": 94.5,
+      "amx_vad_during_llm_ms": [
+        356.97,
+        1401.86
+      ]
+    }
+  },
+  "direction_c_vad_locked_pieces_utter_e2e_ms": {
+    "wav_c_16_5s": {
+      "default_pieces60": 498.5,
+      "pieces15": 213.0,
+      "asr_default": 478.0,
+      "asr_pieces15": 155.0
+    },
+    "wav_d_23_9s": {
+      "default_pieces60": 569.5,
+      "pieces15": 349.0,
+      "asr_default": 554.0,
+      "asr_pieces15": 246.0
+    },
+    "wav_e_38_7s": {
+      "default_pieces60": 1293.5,
+      "pieces15": 250.0,
+      "asr_default": 852.0,
+      "asr_pieces15": 154.0
+    },
+    "text_sim_default_vs_pieces15": {
+      "wav_c": 0.9806,
+      "wav_d": 0.9794,
+      "wav_e": 0.7628
+    }
+  }
+}
