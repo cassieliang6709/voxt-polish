@@ -64,6 +64,9 @@ public:
     // Reset cached user-suffix KV while keeping pinned system prompt KV intact.
     void reset_to_system_prefix();
 
+    // Lightweight 1-token Metal GPU keepwarm without evicting pinned system prompt KV.
+    void keepwarm_ping();
+
     // Polish raw ASR text (returns cleaned text + detailed latency/KV/spec metrics).
     PolishMetrics polish(const std::string &asr_text, int32_t max_tokens = -1);
 

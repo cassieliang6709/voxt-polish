@@ -219,6 +219,17 @@ void run_http_server(voxt::PolishEngine &engine, int port) {
             continue;
         }
 
+        if (first_line.rfind("POST /completion", 0) == 0) {
+            engine.keepwarm_ping();
+            const std::string payload = "{\"content\":\"ok\",\"stop\":true}";
+            const std::string resp =
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " +
+                std::to_string(payload.size()) + "\r\nConnection: close\r\n\r\n" + payload;
+            send_all(cli, resp);
+            ::close(cli);
+            continue;
+        }
+
         if (first_line.rfind("POST /v1/chat/completions", 0) == 0) {
             std::string user_text = extract_last_user_content(body);
             bool utter_xml = unwrap_utter_input(user_text);

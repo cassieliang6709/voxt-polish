@@ -343,6 +343,27 @@ void PolishEngine::reset_to_system_prefix() {
     kv_len_ = n_sys;
 }
 
+void PolishEngine::keepwarm_ping() {
+    // Run a single 1-token forward pass right after the pinned system prompt, then drop that 1 slot
+    // so Metal GPU stays clocked up while preserving [0, n_sys) system KV 100% intact.
+    llama_memory_t mem = llama_get_memory(ctx_);
+    const int32_t pos = kv_len_;
+    if (pos + 2 >= cfg_.n_ctx) {
+        reset_to_system_prefix();
+    }
+    const int32_t ping_pos = kv_len_;
+    llama_batch batch = llama_batch_init(1, 0, 1);
+    batch.n_tokens = 1;
+    batch.token[0] = sys_tokens_.back();
+    batch.pos[0] = ping_pos;
+    batch.n_seq_id[0] = 1;
+    batch.seq_id[0][0] = 0;
+    batch.logits[0] = 1;
+    llama_decode(ctx_, batch);
+    llama_batch_free(batch);
+    llama_memory_seq_rm(mem, 0, ping_pos, -1);
+}
+
 std::vector<int32_t> PolishEngine::draft_ngram_simple(
     const std::vector<int32_t> &source_tokens,
     int32_t last_tok,
