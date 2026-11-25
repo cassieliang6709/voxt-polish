@@ -25,3 +25,5 @@ apple_silicon/*.mlpackage/
 apple_silicon/*.mlmodelc/
 apple_silicon/ane_vad_bench
 apple_silicon/ane_vad_bench_b32
+apple_silicon/silero_vad_amx
+apple_silicon/omni_optimization_results.json

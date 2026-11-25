@@ -1,13 +1,13 @@
 # voxt-polish
 
-End-to-end on-device voice-dictation polishing stack for Apple Silicon: data curation & PII scrubbing, full-parameter bf16 SFT of `Qwen3-0.6B` with P0 entity-preservation early stopping, 3-tier GGUF behavioral train-inference parity gate, a zero-Python **C++20 embedded `libllama` runtime**, and **CoreML Apple Neural Engine (ANE)** Silero VAD offloading.
+End-to-end on-device voice-dictation polishing stack for Apple Silicon: data curation & PII scrubbing, full-parameter bf16 SFT of `Qwen3-0.6B` with P0 entity-preservation early stopping, 3-tier GGUF behavioral train-inference parity gate, a zero-Python **C++20 embedded `libllama` runtime**, **pure C++ Apple Accelerate (AMX)** & **CoreML (ANE)** Silero VAD v6 offloading, and **`Qwen3-ASR-0.6B` DFlash** speculative decoding benchmarks.
 
 > **Privacy & Weight Distribution Note:** This public repository contains **all source code, prompt templates, synthetic datasets (`examples/`), and anonymized aggregate metrics** — ready to clone, build, and run directly. Personal dictation corpora, raw recordings, personal dictionaries, logs, and personal fine-tuned weights are excluded via `.gitignore` (see [Quick Start](#quick-start) below to run immediately with any public Hugging Face `Qwen3` GGUF or train your own on `examples/`).
 
 ## Components
 
 - `cpp/` (`CMakeLists.txt`, `polish_engine.hpp/.cpp`, `main.cpp`): zero-Python **C++20 embedded `libllama` inference engine & OpenAI-compatible HTTP/SSE server** — pins system prompt KV `[0, N_sys)` with incremental LCP prefix reuse (`llama_memory_seq_rm`), hard-masks `<think>`/`</think>` via a custom `llama_sampler_i`, runs in-process `ngram-simple` speculative decoding (`n=1, m=6`), and integrates deterministic dictionary replacement + length circuit-breaker guardrails.
-- `apple_silicon/` (`convert_silero_coreml.py`, `convert_silero_coreml_batched.py`, `ane_vad_bench.swift`, `ane_vad_bench_b32.swift`, `run_heterogeneous_bench.py`): **Apple Silicon Metal GPU contention suite** (MLX `qwen3_asr_server` vs GGML `voxt_polish_cpp`) and **32-chunk batched CoreML FP16 Silero VAD v6** offload to Apple Neural Engine (ANE).
+- `apple_silicon/` (`silero_vad_amx.cpp`, `convert_silero_coreml.py`, `convert_silero_coreml_batched.py`, `ane_vad_bench.swift`, `ane_vad_bench_b32.swift`, `run_heterogeneous_bench.py`, `bench_omni_realtime.py`): **Apple Silicon heterogeneous benchmark suite** — Metal GPU contention (MLX `qwen3_asr_server` vs GGML `voxt_polish_cpp`), **pure C++ Apple Accelerate (AMX) Silero VAD v6** (streaming `B=1` & batched `B=32`, zero GPU usage), **CoreML ANE Silero VAD v6**, and **`Qwen3-ASR-0.6B` DFlash** speculative decoding & `/v1/realtime` KV reuse benchmarks.
 - `clean_template.py` & `skills/dictation-data-curation/SKILL.md`: deterministic cleanup (filler words, stray question marks, CJK/ASCII spacing, inline numbered lists, entity-mismatch flagging) with external `--patches` JSON.
 - `train_polish_sft.py`: pure PyTorch + `transformers` full-parameter bf16 SFT (peak VRAM `6.39 GiB` on RTX 4090), prompt loss masking, `enable_thinking=False`, chronological holdout split, `--anchor-pairs`, and `--eval-each-epoch` early stopping by `p0_preserve_recall`.
 - `prompts/sft_system.txt`: single-source 70-character system prompt shared verbatim between training, offline eval, Python gateway, and C++20 serving.
@@ -86,21 +86,27 @@ python3 train_polish_sft.py \
   examples/sample_dictionary.json
 ```
 
-### 3. Convert & Benchmark 32-Chunk Batched CoreML ANE Silero VAD (Apple Silicon)
+### 3. Build & Benchmark Pure C++ Accelerate (AMX) & CoreML (ANE) Silero VAD (Apple Silicon)
 
 ```bash
+# Option A (Recommended): Zero-dependency C++ Accelerate (AMX) Silero VAD v6
+# Works for both chunk=1 (32ms real-time streaming) and b32 offline batching, 0% Metal GPU usage
+clang++ -O3 -std=c++17 -framework Accelerate \
+  apple_silicon/silero_vad_amx.cpp -o apple_silicon/silero_vad_amx
+
+./apple_silicon/silero_vad_amx /path/to/silero-vad-v6/model.safetensors stream /path/to/*.wav
+./apple_silicon/silero_vad_amx /path/to/silero-vad-v6/model.safetensors b32 /path/to/*.wav
+
+# Option B: 32-chunk (1.024s) CoreML FP16 MLProgram targeting Apple Neural Engine
 uv venv apple_silicon/.venv --python 3.12
 uv pip install --python apple_silicon/.venv/bin/python torch coremltools safetensors numpy
 
-# Export 32-chunk (1.024s) CoreML FP16 MLProgram targeting Apple Neural Engine
 apple_silicon/.venv/bin/python apple_silicon/convert_silero_coreml_batched.py \
   --safetensors /path/to/silero-vad-v6/model.safetensors \
   --out apple_silicon/SileroVADv6_B32.mlpackage
 
 xcrun coremlcompiler compile apple_silicon/SileroVADv6_B32.mlpackage apple_silicon/
 swiftc -O apple_silicon/ane_vad_bench_b32.swift -o apple_silicon/ane_vad_bench_b32
-
-# Run on any 16 kHz mono PCM16 WAV files
 ./apple_silicon/ane_vad_bench_b32 apple_silicon/SileroVADv6_B32.mlmodelc cpu_and_ne /path/to/*.wav
 ```
 
@@ -153,8 +159,34 @@ Measured on M1 Pro 16 GB with the official Voxt 2.1.3 Omni Runtime (`Qwen3-ASR 0
 | D (23.9 s) | 1.60 s | 0.57 s | 0.64 s | 0.57 s | **0.35 s** *(ASR 246 ms, sim 0.979)* |
 | E (38.7 s, longest) | 2.77 s *(max 4.66 s)* | 2.78 s *(max 8.67 s)* | 1.34 s *(zero spike)* | 1.29 s | **0.25 s** *(11.1× vs 4B; 3-cut sim 0.763)* |
 
-### 4. Apple Silicon Metal GPU Contention & CoreML ANE Offload (`bench/apple_silicon_lowlevel_results.json`)
+### 4. Apple Silicon Metal GPU Contention & Heterogeneous VAD Offload
 
 - **C++20 Streaming LCP KV Reuse (`--bench-streaming`)**: Across a 12-step growing live-polish session, pinning system KV `[0, N_sys)` plus incremental LCP reuse cut newly prefilled tokens from `340` to **`149` (`-56.2%`, `86.6%` KV reuse)** and total session compute from `785.3 ms` to **`668.1 ms`**.
-- **Metal GPU Contention (MLX ASR vs GGML LLM)**: Running MLX `qwen3_asr_server` and GGML `voxt_polish_cpp` concurrently on M1 Pro slowed 38.7 s ASR by **`+57.2%`** (`858.8 -> 1,349.9 ms`) and 0.6B LLM by **`+100.1%`** (`99.8 -> 199.7 ms`).
-- **32-Chunk Batched CoreML ANE Silero VAD v6**: Naive single-chunk (`B=1`) CoreML ANE dispatch took `1,174.6 ms` on 38.7 s audio due to per-call IPC overhead; unrolling 32 chunks (`1.024 s`) in one CoreML FP16 MIL graph dropped it to **`20.64 ms`** (`17.3 us/chunk`, RTF `0.0005`), 5-recording sum **`52.42 ms`** (**`8.05×`** faster than MLX Metal `silero_vad_server`'s `422.2 ms`, **`99.75%`** decision agreement vs PyTorch FP32 across 1,194 chunks, `0%` Metal GPU contention).
+- **Metal GPU Contention (MLX ASR vs GGML LLM)**: Running MLX `qwen3_asr_server` and GGML `voxt_polish_cpp` concurrently on M1 Pro slowed 38.2 s ASR by **`+38.9% to +57.2%`** (`820.7 -> 1,139.9 ms` / `858.8 -> 1,349.9 ms`) and 0.6B LLM by **`+62.1% to +100.1%`** (`90.2 -> 146.2 ms` / `99.8 -> 199.7 ms`).
+- **Silero VAD v6 Backend Comparison (5 Real WAVs = 96.8 s total / 3,025 chunks, M1 Pro 16 GB)**:
+
+| VAD Backend | Mode | 5-WAV Sum | 38.2 s WAV E | Per-Chunk | Parity vs PyTorch FP32 | Metal GPU Usage |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| MLX Metal (`silero_vad_server`) | Full WAV | 422.2 ms | 63.6 ms | — | Reference | Contends with LLM |
+| CoreML ANE (`B=1`, FP16 bug fixed) | Streaming (32 ms) | 373.6 ms | 147.6 ms | 123.6 µs | 99.75% (FP16) | 0% (ANE) |
+| **C++ Accelerate AMX (`stream`, `B=1`)** | **Streaming (32 ms)** | **106.2 ms** | **41.3 ms** | **34.6 µs** | **100.0% (`<=4.8e-5`)** | **0% (CPU/AMX)** |
+| CoreML ANE (`B=32`) | Offline (1.024 s) | 56.3 ms | 19.9 ms | 16.7 µs | 99.75% (FP16) | 0% (ANE) |
+| **C++ Accelerate AMX (`b32`)** | **Offline (1.024 s)** | **37.3 ms** | **14.6 ms** | **12.2 µs** | **100.0% (`<=4.8e-5`)** | **0% (`+2.2%` LLM)** |
+
+- **Zero-Contention Proof**: Running 62 back-to-back `silero_vad_amx b32` passes (`13.42 ms` median per 38.2 s WAV, `2,846×` real-time) concurrently with `voxt_polish_cpp` shifted LLM median from `90.3 ms` to **`92.2 ms` (`+2.2%`)**.
+
+### 5. `sglang-omni` Qwen3-ASR 0.6B DFlash Speculative Decoding & Pipeline Diagnostics
+
+Benchmarked on the same 5 real Chinese WAVs (3 runs each, warmup included, `Qwen3-ASR-0.6B-4bit` + `wilsonzheng0327/Qwen3-ASR-0.6B-dflash`, SHA-256 verified):
+
+| ASR Decoding Config | 5-WAV Sum | Speedup | 38.2 s WAV E | Draft Accept | Tok / Round | Exact Match |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Plain (`Qwen3-ASR-0.6B-4bit`) | 2,151.6 ms | 1.00× | 832.6 ms | — | 1.00 | 5/5 (ref) |
+| DFlash `bf16` (`adaptive`) | 2,001.6 ms | 1.07× | 793.4 ms | 62.2% (196/315) | 5.49 | 5/5 |
+| DFlash `bf16` (`fixed`) | 1,985.6 ms | 1.08× | 780.6 ms | 60.7% (204/336) | 5.15 | 5/5 |
+| **DFlash `8-bit` (`fixed`, Voxt default)** | **1,794.2 ms** | **1.20×** | **692.3 ms** | **59.2% (203/343)** | **5.04** | **5/5** |
+| **DFlash `4-bit` (`fixed`)** | **1,789.6 ms** | **1.20×** | **713.6 ms** | **58.9% (202/343)** | **5.04** | **5/5** |
+
+- **Why quantized DFlash beats `bf16` on 0.6B**: The `bf16` draft (`262 MB`) is 38% the size of the 4-bit target (`680 MB`), so reading `bf16` weights eats most of the memory-bandwidth win; quantizing the draft to 8-bit/4-bit unlocks **`1.20×` exact-match speedup** and trims concurrent ASR latency under LLM load from `1,139.9 ms` to **`1,009.8 ms` (`-130.1 ms`)**.
+- **ASR Dictionary Prompt Overhead**: Injecting 30 dictionary terms into `qwen3_asr_server` slowed 5-WAV `Final` total from `2,211.5 ms` to `2,511.4 ms` (**`+299.9 ms / +13.6%`**) with zero English-term gain when external deterministic dictionary replacement is active.
+- **Log-Mel Global Peak Drift KV Invalidation**: Across 1 s streaming refreshes, **2 of 4 recordings >= 8 s (50%)** triggered full `RefreshReuse` KV cache invalidation (`mx::array_equal == false`) when a louder late frame lifted the `max - 8.0` floor — e.g., wav E at `t=27 s` lifted peak `1.1272 -> 1.5672`, shifting only 13.5% of silent bins by `<= 0.11` yet discarding **24.0 s (2,400 frames)** of cached encoder & KV state.
