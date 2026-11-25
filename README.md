@@ -47,7 +47,23 @@ Key engineering findings:
 - **Why `Q8_0` beats `Q4_0` on 0.6B**: `Q4_0` failed the `>= 0.95` parity gate (`0.9252`, exact match dropped `29 -> 6/40`, `sim_gt` dropped `-2.16 pt`) and introduced a polarity inversion on holdout `#5` ("auto-delete" flipped to "do not auto-delete"), while offering virtually no speed gain over `Q8_0 + ngram-simple` (`0.211s` vs `0.223s`, `227.4` vs `232.1 tok/s`).
 - **`ngram-simple` speedup on 0.6B**: Even with light paraphrasing, `ngram-simple (n=1, m=6)` achieved 47.1% median draft acceptance (3.82 tokens/step), cutting `Q8_0` median latency by **2.47x** (`0.551s -> 0.223s`) and p90 by **2.34x** (`1.331s -> 0.568s`) with bit-identical outputs vs no-spec.
 - **0.6B `Q8_0` vs 4B `Q4_0` (`voxt_like.py` 6-sentence benchmark)**: `Qwen3-4B-Q4_0` (2.38 GB) warm median `0.458–0.560s` (`p90 0.667–0.709s`, `57.5–66.8 tok/s`) vs `Qwen3-0.6B-SFT-Q8_0` (610 MB) warm median **`0.096–0.098s`** (`p90 0.142–0.143s`, `331–347 tok/s`) — **4.8x–5.8x faster** at **3.9x smaller footprint**.
-- **Known limitation (honest tradeoff)**: On rare explicit mid-sentence self-corrections (`A, no, B`) under-represented in the 348-pair corpus, 0.6B still trails 4B zero-shot; next data iteration targets 20–30 diverse self-correction pairs and real user-edited DPO pairs.
+- **Known limitation (honest tradeoff)**: Run 4 raised unseen mid-sentence self-correction pass rate from `1/10` to `7/10`; `3/10` edge cases remain on short numeric or English inline corrections, to be closed with real user-edited DPO pairs.
+
+### 3. End-to-End Real-Device Latency vs SGLang-Omni Native Voxt (M1 Pro 16 GB)
+
+Measured on the same M1 Pro 16 GB with the official Voxt 2.1.3 Omni Runtime (`Qwen3-ASR 0.6B 4bit`) replaying 5 real Chinese dictations (A–E, 7.4–38.7 s) at 1.0× speed via `VOXTNEW_HELPER_CAPTURE_FILE`, releasing the key 0.5 s after speech ends. Metric: **Stop-to-text latency (`stop→end`)**.
+
+| Metric (`stop→end`) | SGLang-Omni Native Default (4B `Q4_0`, `liveCleanLocal=false`) | Utter Client + 4B `Q4_0` (`liveCleanLocal=true` + punct reuse) | Utter + `0.6B Q8_0` + `ngram-simple` + Gateway (`liveCleanLocal=true`) | Reduction vs Native |
+| --- | ---: | ---: | ---: | ---: |
+| Overall Median | 1.31 s *(30-run batch: 1.69 s)* | 0.57 s | **0.55 s** | **-58.0%** *(-67.5% vs 30-run)* |
+| Overall Mean | 1.64 s *(30-run batch: 2.16 s)* | 1.59 s *(E 8.7s spike)* | **0.80 s** | **-51.0%** |
+| Recording A (7.4 s) | 0.80 s | 0.28 s | **0.31 s** | **-61.3%** |
+| Recording B (12.8 s, ASR revision) | 1.01 s | 1.44 s | **0.48 s** | **-52.5%** |
+| Recording D (23.9 s) | 1.60 s | 0.57 s | **0.64 s** | **-60.0%** |
+| Recording E (38.7 s, longest) | 2.77 s *(max 4.66 s)* | 2.78 s *(max 8.67 s)* | **1.34 s *(zero spike)*** | **-51.6%** |
+
+- **What cuts end-to-end latency in half**: SGLang-Omni's native Voxt disables live clean-up for local (`127.0.0.1`) LLMs and invalidates reused prefixes on single punctuation diffs. Combining local live clean-up + punctuation-tolerant prefix reuse (`sgl-project/sglang-omni#4643` + Utter) with the 610 MB fine-tuned `Qwen3-0.6B Q8_0` + `ngram-simple` cuts both median (`-58.0%`) and mean (`-51.0%`) stop-to-text wait by more than half while eliminating the 4B memory-contention tail spikes.
+- **Measured GPU-sharing tradeoff**: running local live clean-up alongside local ASR adds ~40 ms to ASR Final and ~60 ms to the first live caption, while keeping live preview cadence unchanged (`1.01 s`).
 
 ## Quick Start (Synthetic Data)
 
