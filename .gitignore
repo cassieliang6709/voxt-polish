@@ -1,0 +1,21 @@
+# Private personal dictation data, recordings, logs, and fine-tuned weights (NEVER commit)
+typeless-data/
+backup/
+models/
+bench2083/
+dictionary.json
+clean_pairs.py
+prompts/replay*.md
+bench/server*.log
+bench/results.jsonl
+server.log
+*.db
+*.sqlite
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.html
+__pycache__/
+.DS_Store
+.venv/

@@ -1,0 +1,14 @@
+{
+  "AI Infra": [
+    ["llama.cpp", ["LAMA CPP", "llama cpp"]],
+    ["vLLM", ["VLLM", "V LLM"]],
+    ["SGLang", ["SG Lang", "S G Lang"]],
+    ["KV cache", ["KV 缓存", "K V cache"]],
+    ["FlashAttention", ["flash attention"]]
+  ],
+  "Dev Tools": [
+    ["Claude Code", ["cloud code"]],
+    ["GitHub", ["git hub"]],
+    ["README", ["read me"]]
+  ]
+}

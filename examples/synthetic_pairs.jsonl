@@ -1,0 +1,5 @@
+{"id": "syn-001", "created_at": "2026-11-01T10:00:00Z", "asr": "嗯那个我今天想把那个 SGLang 的 radix cache 呃不对是 radix attention 的 PR 再看一下，然后明天跟 mentor 约时间聊一下。", "typeless": "我今天想把 SGLang 的 radix attention PR 再看一下，明天跟 mentor 约时间聊一下"}
+{"id": "syn-002", "created_at": "2026-11-01T10:05:00Z", "asr": "我觉得这个界面有两个问题，第一个是按钮太小了点不到，然后第二个是加载的时候没有进度提示，你看怎么改一下。", "typeless": "我觉得这个界面有两个问题：\n\n1. 按钮太小了点不到\n2. 加载的时候没有进度提示\n\n你看怎么改一下"}
+{"id": "syn-003", "created_at": "2026-11-01T10:10:00Z", "asr": "讲太浅了，我希望从矩阵讲起，最后能用 Python 自己写一个 MLA 这种程度。", "typeless": "讲太浅了，我希望从矩阵讲起，最后能达到用 Python 自己写一个 MLA 这种程度"}
+{"id": "syn-004", "created_at": "2026-11-01T10:15:00Z", "asr": "明天上午十点不对是十一点要开会，然后下午去跑一下 4090 的 benchmark。", "typeless": "明天上午 11 点要开会，下午去跑一下 4090 的 benchmark"}
+{"id": "syn-005", "created_at": "2026-11-01T10:20:00Z", "asr": "这个 bug 是因为 useEffect 的依赖数组里少了 userId，所以切换用户的时候数据没刷新，然后你在本地帮我复现一下。", "typeless": "这个 bug 是因为 useEffect 的依赖数组里少了 userId，所以切换用户的时候数据没刷新，你在本地帮我复现一下"}

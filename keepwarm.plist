@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Keep the GPU warm for the Voxt polish server.
+  Every 30 seconds, ask llama-server on 8090 for one token, pinned to slot 1
+  so the Voxt prompt cache in slot 0 is not overwritten.
+  Measured: after 90-150 s idle, polish latency rises from ~0.5 s to 1.6-4.4 s.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>local.voxt-polish.keepwarm</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/curl</string>
+    <string>-s</string><string>-m</string><string>5</string><string>-o</string><string>/dev/null</string>
+    <string>-H</string><string>Content-Type: application/json</string>
+    <string>-d</string><string>{"prompt":"ok","n_predict":1,"id_slot":1,"cache_prompt":true}</string>
+    <string>http://127.0.0.1:8090/completion</string>
+  </array>
+  <key>StartInterval</key><integer>30</integer>
+  <key>RunAtLoad</key><true/>
+</dict>
+</plist>
