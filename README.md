@@ -22,7 +22,8 @@ End-to-end on-device voice-dictation polishing pipeline: data curation & PII scr
 | Zero-shot `Qwen3-0.6B` | 0.0726 | 79.7% (47/59) | 0 | 0 / 30 | 75% answered as chatbot or translated |
 | Run 1 (325 raw pairs, 4 ep) | 0.8217 | 96.6% (57/59) | 26 | 0 / 0 | Heavy filler retention; `JD -> JIRA` error |
 | Run 2 (324 clean pairs, 4 ep) | 0.8193 | 91.5% (54/59) | 3 (-88.5%) | 0 / 0 | Overfit at ep 4: 3 entity/clause regressions |
-| **Run 3 Best (PII-scrubbed 324 + 24 synthetic anchors, Ep 2)** | **0.8316** | **100.0% (59/59)** | **4** | **0 / 0** | **Zero P0 entity errors; ep 3/4 dropped to 93.2% + 1 drop** |
+| Run 3 Best (PII-scrubbed 324 + 24 synthetic anchors, Ep 2) | 0.8316 | 100.0% (59/59) | 4 | 0 / 0 | Zero P0 entity errors; unseen self-correction 1/10 |
+| **Run 4 Best (PII-scrubbed 324 + 50 anchors incl. self-correction, Ep 1)** | **0.8362** | **100.0% (59/59)** | **3** | **0 / 0** | **Unseen self-correction jumped 1/10 -> 7/10** |
 
 Run 3 per-epoch curve (proving why training loss alone misleads on small datasets):
 - Epoch 1 (`loss=0.9760`): `sim=0.8265`, `P0-Preserve=98.3%`, `under_drops=0`

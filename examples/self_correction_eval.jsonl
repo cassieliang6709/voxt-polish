@@ -1,0 +1,10 @@
+{"id": "sc-01", "asr": "嗯那个我今天想就是说把那个 SGLang 的 radix cache 呃不对是 radix attention 的那个 PR 再看一下然后明天跟那个 mentor 约个时间聊一下", "must_have": ["radix attention"], "must_not_have": ["radix cache", "不对"]}
+{"id": "sc-02", "asr": "明天上午十点不对是十一点要跟面试官 mock interview 然后下午去健身房", "must_have": ["11", "十一点"], "must_not_have": ["十点", "10点", "不对"]}
+{"id": "sc-03", "asr": "把这个文件推到 dev 分支不对是推到 main 分支上去。", "must_have": ["main"], "must_not_have": ["dev", "不对"]}
+{"id": "sc-04", "asr": "帮我把周报发给小李不对发给小赵，今天下班前发出去。", "must_have": ["小赵"], "must_not_have": ["小李", "不对"]}
+{"id": "sc-05", "asr": "我们用的是 FlashAttention-1 呃不对是 FlashAttention-2 的内核。", "must_have": ["FlashAttention-2"], "must_not_have": ["FlashAttention-1", "不对"]}
+{"id": "sc-06", "asr": "这场面试改到周四下午两点不对三点开始，记得提前十分钟进房间。", "must_have": ["3", "三点"], "must_not_have": ["两点", "2点", "不对"]}
+{"id": "sc-07", "asr": "把最大长度设成 256 呃不对设成 512，不然长口述会截断。", "must_have": ["512"], "must_not_have": ["256", "不对"]}
+{"id": "sc-08", "asr": "这个脚本依赖的是 numpy 呃不对是 scipy 里的优化函数。", "must_have": ["scipy"], "must_not_have": ["numpy", "不对"]}
+{"id": "sc-09", "asr": "我打算先改英文简历不对先改中文简历，改完再同步英文版。", "must_have": ["中文简历"], "must_not_have": ["英文简历不对", "不对"]}
+{"id": "sc-10", "asr": "把推理后端从 Ollama 不对从 mlx-lm 换成了 llama.cpp。", "must_have": ["mlx-lm", "llama.cpp"], "must_not_have": ["Ollama", "不对"]}

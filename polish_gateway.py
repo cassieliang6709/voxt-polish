@@ -209,9 +209,25 @@ def run_eval(args):
     )
 
 
+INPUT_TAG_RE = re.compile(r"<input>\s*(.*?)\s*</input>", re.S)
+
+
+def extract_voxt_input(user_msg: str):
+    """If incoming message uses Voxt/Utter <input>...</input> framing, unwrap it."""
+    m = INPUT_TAG_RE.search(user_msg)
+    if m:
+        return m.group(1).strip(), True
+    return user_msg, False
+
+
 def run_serve(args):
     alias_rules, _ = load_dictionary(args.dict)
     badcase_path = Path(args.badcase_log) if args.badcase_log else None
+    override_sys = (
+        Path(args.override_system_prompt).read_text(encoding="utf-8").strip()
+        if args.override_system_prompt
+        else None
+    )
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -227,12 +243,15 @@ def run_serve(args):
             length = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(length))
             msgs = payload.get("messages", [])
-            sys_msg = next((m["content"] for m in msgs if m.get("role") == "system"), "")
-            user_msg = next((m["content"] for m in reversed(msgs) if m.get("role") == "user"), "")
+            req_sys = next((m["content"] for m in msgs if m.get("role") == "system"), "")
+            req_user = next((m["content"] for m in reversed(msgs) if m.get("role") == "user"), "")
+            raw_asr, is_voxt_framed = extract_voxt_input(req_user)
+            sys_msg = override_sys if override_sys is not None else req_sys
+
             res = polish_once(
                 args.upstream,
                 sys_msg,
-                user_msg,
+                raw_asr,
                 alias_rules,
                 max_tokens=payload.get("max_tokens"),
             )
@@ -243,7 +262,7 @@ def run_serve(args):
                             {
                                 "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
                                 "reason": res["fallback_reason"],
-                                "asr": user_msg,
+                                "asr": raw_asr,
                                 "raw_pred": res["raw_pred"],
                                 "fallback": res["pred"],
                             },
@@ -251,13 +270,38 @@ def run_serve(args):
                         )
                         + "\n"
                     )
+            out_content = f"<output>\n{res['pred']}\n</output>" if is_voxt_framed else res["pred"]
+            req_id = f"voxt-gw-{int(time.time() * 1000)}"
+            if payload.get("stream"):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                chunk1 = {
+                    "id": req_id,
+                    "object": "chat.completion.chunk",
+                    "choices": [{"index": 0, "delta": {"role": "assistant", "content": out_content}, "finish_reason": None}],
+                }
+                chunk2 = {
+                    "id": req_id,
+                    "object": "chat.completion.chunk",
+                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                }
+                body = (
+                    f"data: {json.dumps(chunk1, ensure_ascii=False)}\n\n"
+                    f"data: {json.dumps(chunk2, ensure_ascii=False)}\n\n"
+                    "data: [DONE]\n\n"
+                ).encode("utf-8")
+                self.wfile.write(body)
+                return
+
             resp_obj = {
-                "id": f"voxt-gw-{int(time.time() * 1000)}",
+                "id": req_id,
                 "object": "chat.completion",
                 "choices": [
                     {
                         "index": 0,
-                        "message": {"role": "assistant", "content": res["pred"]},
+                        "message": {"role": "assistant", "content": out_content},
                         "finish_reason": "stop",
                     }
                 ],
@@ -265,6 +309,7 @@ def run_serve(args):
                 "voxt_gateway": {
                     "fallback_reason": res["fallback_reason"],
                     "applied_aliases": res["applied_aliases"],
+                    "voxt_framed": is_voxt_framed,
                 },
             }
             out_bytes = json.dumps(resp_obj, ensure_ascii=False).encode("utf-8")
@@ -298,6 +343,7 @@ def main():
     p_srv.add_argument("--port", type=int, default=8092)
     p_srv.add_argument("--upstream", required=True)
     p_srv.add_argument("--dict", default=None)
+    p_srv.add_argument("--override-system-prompt", default=None, help="Override incoming system prompt (e.g. prompts/sft_system.txt)")
     p_srv.add_argument("--badcase-log", default=None)
 
     args = ap.parse_args()
